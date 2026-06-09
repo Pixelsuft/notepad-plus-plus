@@ -2391,10 +2391,11 @@ namespace NppDarkMode
                     ::SetBkMode(hdc, TRANSPARENT);
                     ::SetTextColor(hdc, getTextColor());
                     // Use tray color for the buttons, default background color otherwise
-                    ::SetBkColor(hdc, uMsg == WM_CTLCOLORBTN ?
+                    bool useCtrlBg = !g_isWine && uMsg == WM_CTLCOLORBTN;
+                    ::SetBkColor(hdc, useCtrlBg ?
                         getCtrlBackgroundColor() : getBackgroundColor());
-                    return reinterpret_cast<LRESULT>(
-                        uMsg == WM_CTLCOLORBTN ? getCtrlBackgroundBrush() : getBackgroundBrush());
+                    return reinterpret_cast<LRESULT>(useCtrlBg ?
+                        getCtrlBackgroundBrush() : getBackgroundBrush());
                 }
                 break;
             }
@@ -2414,7 +2415,8 @@ namespace NppDarkMode
 
             case WM_PAINT:
             {
-                if (NppDarkMode::isEnabled())
+                // Wine doesn't have message box tray
+                if (!g_isWine && NppDarkMode::isEnabled())
                 {
                     LRESULT res = ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
                     HDC hdc = ::GetDC(hWnd);
