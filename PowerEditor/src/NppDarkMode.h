@@ -86,6 +86,7 @@ namespace NppDarkMode
 	void initDarkMode();				// pulls options from NppParameters
 	void refreshDarkMode(HWND hwnd, bool forceRefresh = false);	// attempts to apply new options from NppParameters, sends NPPM_INTERNAL_REFRESHDARKMODE to hwnd's top level parent
 
+	void initDarkMessageBoxForModule(void* moduleBase);
 	void initAdvancedOptions();
 
 	bool isEnabled();
@@ -191,6 +192,7 @@ namespace NppDarkMode
 	void subclassGroupboxControl(HWND hwnd);
 	void subclassTabControl(HWND hwnd);
 	void subclassComboBoxControl(HWND hwnd);
+	void subclassMessageBox(HWND hwnd);
 
 	bool subclassTabUpDownControl(HWND hwnd);
 

@@ -26,6 +26,7 @@
 #include <vssym32.h>
 
 #include <memory>
+#include <winuser.h>
 
 #include "Parameters.h"
 #include "dpiManagerV2.h"
@@ -87,6 +88,8 @@ static bool cmpWndClassName(HWND hWnd, const wchar_t* classNameToCmp)
 {
 	return (getWndClassName(hWnd) == classNameToCmp);
 }
+
+extern PIMAGE_THUNK_DATA FindIatThunkInModule(void *moduleBase, const char *dllName, const char *funcName);
 
 namespace NppDarkMode
 {
@@ -477,6 +480,7 @@ namespace NppDarkMode
 		}
 
 		g_isWine = pWGV != nullptr;
+		initDarkMessageBoxForModule(GetModuleHandle(nullptr));
 	}
 
 	// attempts to apply new options from NppParameters, sends NPPM_INTERNAL_REFRESHDARKMODE to hwnd's top level parent
@@ -511,6 +515,75 @@ namespace NppDarkMode
 	{
 		const NppGUI& nppGui = NppParameters::getInstance().getNppGUI();
 		g_advOptions = nppGui._darkmode._advOptions;
+	}
+
+	static LRESULT CALLBACK cbtDarkMessageBoxHookProc(int nCode, WPARAM wParam, LPARAM lParam)
+	{
+        if (nCode == HCBT_CREATEWND)
+        {
+            HWND hwnd = reinterpret_cast<HWND>(wParam);
+
+            wchar_t className[8];
+            if (GetClassName(hwnd, className, 8) == 6)
+            {
+                if (wcscmp(className, L"#32770") == 0)
+                {
+                    // It's main message box window
+                    AllowDarkModeForWindow(hwnd, NppDarkMode::isEnabled());
+                    subclassMessageBox(hwnd);
+                }
+                else if (wcscmp(className, L"Button") == 0)
+                {
+                    setDarkExplorerTheme(hwnd);
+                }
+            }
+        }
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+	static int (WINAPI* MessageBoxAOrig)(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType) = nullptr;
+	static int MessageBoxAHook(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType)
+	{
+	    HHOOK hHook = SetWindowsHookEx(WH_CBT, cbtDarkMessageBoxHookProc, nullptr, GetCurrentThreadId());
+	    int ret = MessageBoxAOrig(hWnd, lpText, lpCaption, uType);
+		if (hHook)
+            UnhookWindowsHookEx(hHook);
+		return ret;
+	}
+
+	static int (WINAPI* MessageBoxWOrig)(HWND hWnd, LPCWSTR lpText, LPCWSTR lpCaption, UINT uType) = nullptr;
+	static int MessageBoxWHook(HWND hWnd, LPCWSTR lpText, LPCWSTR lpCaption, UINT uType)
+	{
+	    HHOOK hHook = SetWindowsHookEx(WH_CBT, cbtDarkMessageBoxHookProc, nullptr, GetCurrentThreadId());
+	    int ret = MessageBoxWOrig(hWnd, lpText, lpCaption, uType);
+		if (hHook)
+            UnhookWindowsHookEx(hHook);
+		return ret;
+	}
+
+	void initDarkMessageBoxForModule(void* moduleBase)
+	{
+	    // Set up IAT hooks for MessageBoxA and MessageBoxW
+		if (!moduleBase)
+		    return;
+        PIMAGE_THUNK_DATA pThunk = FindIatThunkInModule(moduleBase, "user32.dll", "MessageBoxW");
+        if (pThunk) {
+            DWORD oldProtect;
+            if (VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), PAGE_READWRITE, &oldProtect)) {
+                MessageBoxWOrig = reinterpret_cast<decltype(MessageBoxWOrig)>(pThunk->u1.Function);
+                pThunk->u1.Function = reinterpret_cast<ULONG_PTR>(MessageBoxWHook);
+                VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), oldProtect, &oldProtect);
+            }
+        }
+        pThunk = FindIatThunkInModule(moduleBase, "user32.dll", "MessageBoxA");
+        if (pThunk) {
+            DWORD oldProtect;
+            if (VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), PAGE_READWRITE, &oldProtect)) {
+                MessageBoxAOrig = reinterpret_cast<decltype(MessageBoxAOrig)>(pThunk->u1.Function);
+                pThunk->u1.Function = reinterpret_cast<ULONG_PTR>(MessageBoxAHook);
+                VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), oldProtect, &oldProtect);
+            }
+        }
 	}
 
 	bool isEnabled()
@@ -2280,6 +2353,87 @@ namespace NppDarkMode
 			auto pComboboxData = reinterpret_cast<DWORD_PTR>(new ComboboxData(cbStyle));
 			::SetWindowSubclass(hWnd, ComboBoxSubclass, static_cast<UINT_PTR>(SubclassID::darkMode), pComboboxData);
 		}
+	}
+
+	static LRESULT CALLBACK MessageBoxSubclass(
+	    HWND hWnd,
+		UINT uMsg,
+		WPARAM wParam,
+        LPARAM lParam,
+        UINT_PTR uIdSubclass,
+        DWORD_PTR dwRefData
+	)
+	{
+	    UNREFERENCED_PARAMETER(dwRefData);
+        switch (uMsg)
+        {
+            case WM_CTLCOLORMSGBOX:
+            case WM_CTLCOLORDLG:
+            case WM_CTLCOLORSTATIC:
+            case WM_CTLCOLORBTN:
+            {
+                if (NppDarkMode::isEnabled())
+                {
+                    HDC hdc = reinterpret_cast<HDC>(wParam);
+                    SetBkMode(hdc, TRANSPARENT);
+                    SetTextColor(hdc, getTextColor());
+                    // Use tray color for the button, default background color otherwise
+                    SetBkColor(hdc, uMsg == WM_CTLCOLORBTN ?
+                        getCtrlBackgroundColor() : getBackgroundColor());
+                    return reinterpret_cast<LRESULT>(
+                        uMsg == WM_CTLCOLORBTN ? getCtrlBackgroundBrush() : getBackgroundBrush());
+                }
+                break;
+            }
+
+            case WM_ERASEBKGND:
+            {
+                if (NppDarkMode::isEnabled())
+                {
+                    HDC hdc = reinterpret_cast<HDC>(wParam);
+                    RECT rc;
+                    GetClientRect(hWnd, &rc);
+                    FillRect(hdc, &rc, getBackgroundBrush());
+                    return TRUE;
+                }
+                break;
+            }
+
+            case WM_PAINT:
+            {
+                if (NppDarkMode::isEnabled())
+                {
+                    LRESULT res = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+                    HDC hdc = GetDC(hWnd);
+                    if (hdc)
+                    {
+                        RECT rc;
+                        GetClientRect(hWnd, &rc);
+                        int trayHeight = g_isAtLeastWindows10 ? 42 : 49;
+                        RECT rcTray = {rc.left, rc.bottom - trayHeight, rc.right, rc.bottom};
+                        FillRect(hdc, &rcTray, getCtrlBackgroundBrush());
+                        ReleaseDC(hWnd, hdc);
+                    }
+                    return res;
+                }
+                break;
+            }
+
+            case WM_DESTROY:
+                RemoveWindowSubclass(hWnd, MessageBoxSubclass, uIdSubclass);
+                break;
+
+            case WM_INITDIALOG:
+            case WM_SHOWWINDOW:
+                RefreshTitleBarThemeColor(hWnd);
+                break;
+        }
+        return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    }
+
+	void subclassMessageBox(HWND hWnd)
+	{
+	    SetWindowSubclass(hWnd, MessageBoxSubclass, 0, 0);
 	}
 
 	static LRESULT CALLBACK ListViewSubclass(
