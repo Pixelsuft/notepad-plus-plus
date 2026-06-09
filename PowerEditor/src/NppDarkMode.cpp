@@ -566,18 +566,22 @@ namespace NppDarkMode
 		if (!moduleBase)
 		    return;
         PIMAGE_THUNK_DATA pThunk = FindIatThunkInModule(moduleBase, "user32.dll", "MessageBoxW");
-        if (pThunk) {
+        if (pThunk)
+        {
             DWORD oldProtect;
-            if (VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), PAGE_READWRITE, &oldProtect)) {
+            if (VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), PAGE_READWRITE, &oldProtect))
+            {
                 MessageBoxWOrig = reinterpret_cast<decltype(MessageBoxWOrig)>(pThunk->u1.Function);
                 pThunk->u1.Function = reinterpret_cast<ULONG_PTR>(MessageBoxWHook);
                 VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), oldProtect, &oldProtect);
             }
         }
         pThunk = FindIatThunkInModule(moduleBase, "user32.dll", "MessageBoxA");
-        if (pThunk) {
+        if (pThunk)
+        {
             DWORD oldProtect;
-            if (VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), PAGE_READWRITE, &oldProtect)) {
+            if (VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), PAGE_READWRITE, &oldProtect))
+            {
                 MessageBoxAOrig = reinterpret_cast<decltype(MessageBoxAOrig)>(pThunk->u1.Function);
                 pThunk->u1.Function = reinterpret_cast<ULONG_PTR>(MessageBoxAHook);
                 VirtualProtect(&pThunk->u1.Function, sizeof(ULONG_PTR), oldProtect, &oldProtect);
@@ -2354,6 +2358,12 @@ namespace NppDarkMode
 		}
 	}
 
+	static int getMessageBoxTrayHeight()
+	{
+	    // Is there a better solution?
+	    return g_isAtLeastWindows10 ? 42 : 49;
+	}
+
 	static LRESULT CALLBACK MessageBoxSubclass(
 	    HWND hWnd,
 		UINT uMsg,
@@ -2412,8 +2422,8 @@ namespace NppDarkMode
                     {
                         RECT rc;
                         ::GetClientRect(hWnd, &rc);
-                        int trayHeight = g_isAtLeastWindows10 ? 42 : 49;
-                        RECT rcTray = {rc.left, rc.bottom - trayHeight, rc.right, rc.bottom};
+                        RECT rcTray = {rc.left, rc.bottom - getMessageBoxTrayHeight(),
+                            rc.right, rc.bottom};
                         ::FillRect(hdc, &rcTray, getCtrlBackgroundBrush());
                         ::ReleaseDC(hWnd, hdc);
                     }
