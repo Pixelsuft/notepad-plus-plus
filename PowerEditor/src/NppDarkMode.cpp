@@ -26,7 +26,6 @@
 #include <vssym32.h>
 
 #include <memory>
-#include <wingdi.h>
 
 #include "Parameters.h"
 #include "dpiManagerV2.h"
