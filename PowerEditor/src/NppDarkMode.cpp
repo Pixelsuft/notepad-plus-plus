@@ -26,6 +26,7 @@
 #include <vssym32.h>
 
 #include <memory>
+#include <wingdi.h>
 
 #include "Parameters.h"
 #include "dpiManagerV2.h"
@@ -2358,12 +2359,6 @@ namespace NppDarkMode
 		}
 	}
 
-	static int getMessageBoxTrayHeight()
-	{
-	    // Is there a better solution?
-	    return g_isAtLeastWindows10 ? 42 : 49;
-	}
-
 	static LRESULT CALLBACK MessageBoxSubclass(
 	    HWND hWnd,
 		UINT uMsg,
@@ -2424,9 +2419,17 @@ namespace NppDarkMode
                     {
                         RECT rc;
                         ::GetClientRect(hWnd, &rc);
-                        RECT rcTray = {rc.left, rc.bottom - getMessageBoxTrayHeight(),
-                            rc.right, rc.bottom};
-                        ::FillRect(hdc, &rcTray, getCtrlBackgroundBrush());
+                        // Not a really good way to calc tray height, but I didn't find any better
+                        // Let's just manually measure white area height
+                        rc.top = rc.bottom - 20;
+                        while (rc.top > 20)
+                        {
+                            if (::GetPixel(hdc, 0, rc.top) == getBackgroundColor())
+                                break;
+                            rc.top--;
+                        }
+                        rc.top++;
+                        ::FillRect(hdc, &rc, getCtrlBackgroundBrush());
                         ::ReleaseDC(hWnd, hdc);
                     }
                     return res;
