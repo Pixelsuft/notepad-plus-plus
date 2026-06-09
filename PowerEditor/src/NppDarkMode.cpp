@@ -541,7 +541,7 @@ namespace NppDarkMode
     }
 
 	static int (WINAPI* MessageBoxAOrig)(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType) = nullptr;
-	static int MessageBoxAHook(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType)
+	static int WINAPI MessageBoxAHook(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType)
 	{
 	    HHOOK hHook = SetWindowsHookEx(WH_CBT, cbtDarkMessageBoxHookProc, nullptr, GetCurrentThreadId());
 	    int ret = MessageBoxAOrig(hWnd, lpText, lpCaption, uType);
@@ -551,7 +551,7 @@ namespace NppDarkMode
 	}
 
 	static int (WINAPI* MessageBoxWOrig)(HWND hWnd, LPCWSTR lpText, LPCWSTR lpCaption, UINT uType) = nullptr;
-	static int MessageBoxWHook(HWND hWnd, LPCWSTR lpText, LPCWSTR lpCaption, UINT uType)
+	static int WINAPI MessageBoxWHook(HWND hWnd, LPCWSTR lpText, LPCWSTR lpCaption, UINT uType)
 	{
 	    HHOOK hHook = SetWindowsHookEx(WH_CBT, cbtDarkMessageBoxHookProc, nullptr, GetCurrentThreadId());
 	    int ret = MessageBoxWOrig(hWnd, lpText, lpCaption, uType);
