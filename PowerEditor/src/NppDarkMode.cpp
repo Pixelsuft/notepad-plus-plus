@@ -523,21 +523,21 @@ namespace NppDarkMode
             HWND hwnd = reinterpret_cast<HWND>(wParam);
 
             wchar_t className[8];
-            if (GetClassName(hwnd, className, 8) == 6)
+            if (::GetClassName(hwnd, className, 8) == 6)
             {
                 if (wcscmp(className, L"#32770") == 0)
                 {
                     // It's main message box window
-                    AllowDarkModeForWindow(hwnd, NppDarkMode::isEnabled());
+                    NppDarkMode::allowDarkModeForWindow(hwnd, NppDarkMode::isEnabled());
                     subclassMessageBox(hwnd);
                 }
                 else if (wcscmp(className, L"Button") == 0)
                 {
-                    setDarkExplorerTheme(hwnd);
+                    NppDarkMode::setDarkExplorerTheme(hwnd);
                 }
             }
         }
-        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+        return ::CallNextHookEx(nullptr, nCode, wParam, lParam);
     }
 
 	static int (WINAPI* MessageBoxAOrig)(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType) = nullptr;
@@ -2366,6 +2366,10 @@ namespace NppDarkMode
 	    UNREFERENCED_PARAMETER(dwRefData);
         switch (uMsg)
         {
+            case WM_NCDESTROY:
+                ::RemoveWindowSubclass(hWnd, MessageBoxSubclass, uIdSubclass);
+                break;
+
             case WM_CTLCOLORMSGBOX:
             case WM_CTLCOLORDLG:
             case WM_CTLCOLORSTATIC:
@@ -2374,10 +2378,10 @@ namespace NppDarkMode
                 if (NppDarkMode::isEnabled())
                 {
                     HDC hdc = reinterpret_cast<HDC>(wParam);
-                    SetBkMode(hdc, TRANSPARENT);
-                    SetTextColor(hdc, getTextColor());
-                    // Use tray color for the button, default background color otherwise
-                    SetBkColor(hdc, uMsg == WM_CTLCOLORBTN ?
+                    ::SetBkMode(hdc, TRANSPARENT);
+                    ::SetTextColor(hdc, getTextColor());
+                    // Use tray color for the buttons, default background color otherwise
+                    ::SetBkColor(hdc, uMsg == WM_CTLCOLORBTN ?
                         getCtrlBackgroundColor() : getBackgroundColor());
                     return reinterpret_cast<LRESULT>(
                         uMsg == WM_CTLCOLORBTN ? getCtrlBackgroundBrush() : getBackgroundBrush());
@@ -2391,8 +2395,8 @@ namespace NppDarkMode
                 {
                     HDC hdc = reinterpret_cast<HDC>(wParam);
                     RECT rc;
-                    GetClientRect(hWnd, &rc);
-                    FillRect(hdc, &rc, getBackgroundBrush());
+                    ::GetClientRect(hWnd, &rc);
+                    ::FillRect(hdc, &rc, getBackgroundBrush());
                     return TRUE;
                 }
                 break;
@@ -2402,37 +2406,33 @@ namespace NppDarkMode
             {
                 if (NppDarkMode::isEnabled())
                 {
-                    LRESULT res = DefSubclassProc(hWnd, uMsg, wParam, lParam);
-                    HDC hdc = GetDC(hWnd);
+                    LRESULT res = ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
+                    HDC hdc = ::GetDC(hWnd);
                     if (hdc)
                     {
                         RECT rc;
-                        GetClientRect(hWnd, &rc);
+                        ::GetClientRect(hWnd, &rc);
                         int trayHeight = g_isAtLeastWindows10 ? 42 : 49;
                         RECT rcTray = {rc.left, rc.bottom - trayHeight, rc.right, rc.bottom};
-                        FillRect(hdc, &rcTray, getCtrlBackgroundBrush());
-                        ReleaseDC(hWnd, hdc);
+                        ::FillRect(hdc, &rcTray, getCtrlBackgroundBrush());
+                        ::ReleaseDC(hWnd, hdc);
                     }
                     return res;
                 }
                 break;
             }
 
-            case WM_DESTROY:
-                RemoveWindowSubclass(hWnd, MessageBoxSubclass, uIdSubclass);
-                break;
-
             case WM_INITDIALOG:
             case WM_SHOWWINDOW:
-                RefreshTitleBarThemeColor(hWnd);
+                ::RefreshTitleBarThemeColor(hWnd);
                 break;
         }
-        return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        return ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
 
 	void subclassMessageBox(HWND hWnd)
 	{
-	    SetWindowSubclass(hWnd, MessageBoxSubclass, 0, 0);
+	    SetWindowSubclass(hWnd, MessageBoxSubclass, static_cast<UINT_PTR>(SubclassID::darkMode), 0);
 	}
 
 	static LRESULT CALLBACK ListViewSubclass(
