@@ -26,6 +26,7 @@
 #include <vssym32.h>
 
 #include <memory>
+#include <wingdi.h>
 
 #include "Parameters.h"
 #include "dpiManagerV2.h"
@@ -2420,8 +2421,9 @@ namespace NppDarkMode
                         ::GetClientRect(hWnd, &rc);
                         // Not a really good way to calc tray height, but I didn't find any better
                         // Let's just manually measure white area height
-                        rc.top = rc.bottom - 20;
-                        while (rc.top > 20)
+						// Height is always bigger than 40, and the top part is bigger
+                        rc.top = rc.bottom - 40;
+                        while (rc.top > 60)
                         {
                             if (::GetPixel(hdc, 0, rc.top) == getBackgroundColor())
                                 break;
@@ -2437,8 +2439,9 @@ namespace NppDarkMode
             }
 
             case WM_INITDIALOG:
-            case WM_SHOWWINDOW:
                 ::RefreshTitleBarThemeColor(hWnd);
+				if (!g_isWine)
+					SetWindowLongPtrW(hWnd, GWL_STYLE, GetWindowLongPtrW(hWnd, GWL_STYLE) | WS_CLIPCHILDREN);
                 break;
         }
         return ::DefSubclassProc(hWnd, uMsg, wParam, lParam);
